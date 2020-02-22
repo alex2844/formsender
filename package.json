@@ -1,0 +1,25 @@
+{
+	"name": "formsender",
+	"version": "1.0.0",
+	"description": "",
+	"bin": {
+		"formsender": "./index.js"
+	},
+	"scripts": {
+		"start": "node index.js"
+	},
+	"dependencies": {
+		"ejs": "^3.0.1",
+		"fastify": "^2.12.0",
+		"node-fetch": "^2.6.0",
+		"point-of-view": "github:alex2844/point-of-view"
+	},
+	"devDependencies": {},
+	"repository": "https://github.com/alex2844/formsender.git",
+	"author": {
+		"name": "Alex Smith",
+		"email": "alex.smith2844@gmail.com",
+		"website": "https://me.qwedl.com/",
+		"github": "https://github.com/alex2844"
+	}
+}

@@ -1,0 +1,217 @@
+<html>
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="description" content="FORMSENDER" />
+	<meta name="author" content="Alex Smith, https://me.qwedl.com/"/>
+	<title>FORMSENDER</title>
+	<link href="https://alex2844.github.io/qad-cmf/dist/css/tablet_dark.css" rel="stylesheet" />
+</head>
+<body>
+	<div class="content">
+		<header class="fixed scrolled">
+			<h1>FORMSENDER</h1>
+			<button id="btn_export">export</button>
+			<button id="btn_import">import</button>
+		</header>
+		<main>
+			<section>
+				<article>
+					<form id="main">
+						<div class="_" id="imports" hidden>
+							<div class="_cd6 _ct4 _cp2">
+								<h2 id="info_name"></h2>
+							</div>
+							<div class="_cd6 _ct4 _cp2">
+								<label class="select _f">
+									<select name="items" id="info_items">
+										<option value="" disabled selected></option>
+									</select>
+									<span>Item</span>
+								</label>
+							</div>
+						</div>
+						<div class="_">
+							<div class="_cd2 _ct4 _cp2 _ac _tc">
+								<label class="switch">
+									<input type="checkbox" name="cors" />
+									<span>Cors Proxy</span>
+								</label>
+							</div>
+							<div class="_cd2 _ct4 _cp2">
+								<label class="select _f">
+									<select name="method">
+										<option>GET</option>
+										<option>POST</option>
+										<option>PUT</option>
+										<option>DELETE</option>
+									</select>
+									<span>Method</span>
+								</label>
+							</div>
+							<div class="_cd6 _ct4 _cp2">
+								<label class="input _f">
+									<input type="url" name="url" placeholder="" required />
+									<span>URL</span>
+								</label>
+							</div>
+							<div class="_cd2 _ct4 _cp2 _ac">
+								<button class="_f">Submit</button>
+							</div>
+						</div>
+						<nav class="tabs">
+							<a href="#body">Body</a>
+							<a href="#headers">Headers<span id="auth" hidden>[Auth]</span></a>
+						</nav>
+						<section class="tabs">
+							<article id="headers">
+								<label class="input _f">
+									<textarea name="headers" rows="5" placeholder="Key: value"></textarea>
+									<span>Headers</span>
+								</label>
+							</article>
+							<article id="body">
+								<label class="input _f">
+									<textarea name="body" rows="5" placeholder="RAW"></textarea>
+									<span>Body</span>
+								</label>
+							</article>
+						</section>
+						<pre hidden><code id="obj" class="prettyprint"></code></pre>
+						<pre hidden><code id="res" class="prettyprint"></code></pre>
+					</form>
+					<script>
+						// http://localhost:3000/?url=http://localhost:3000/api/send/&method=POST
+						// http://localhost:3000/?url=https://api.qwedl.com/ip.php&method=POST
+						// http://localhost:3000/?import= https://raw.githubusercontent.com/fastify/fastify-example-todo/master/todo.postman_collection.json
+						// http://localhost:3000/?import=https://raw.githubusercontent.com/adobe/reactor-postman/master/ReactorProvision.postman_collection.json
+						let isLocal = ('<%= local %>' == 'true'),
+							query = new URLSearchParams(location.search);
+						if (query.get('import'))
+							fetch(query.get('import')).then(e => e.json()).then(e => {
+								console.log(e);
+								info_name.innerText = e.info.name;
+								e.item.forEach(i => info_items.options.add(new Option(i.name+' ['+i.request.method+']')));
+								imports.hidden = false;
+								info_items.addEventListener('change', () => {
+									let req = e.item[info_items.selectedIndex - 1].request;
+									console.log(req);
+									main.method.value = req.method;
+									main.url.value = req.url.raw;
+									main.headers.value = req.header.map(h => h.key+': '+h.value).join('\n');
+									main.body.value = req.body.raw;
+								});
+							});
+						else
+							for (var pair of query.entries()) {
+								if (main[pair[0]])
+									main[pair[0]].value = pair[1];
+							}
+						if (sessionStorage.getItem('Authorization')) {
+							auth.hidden = false;
+							auth.addEventListener('click', () => {
+								sessionStorage.removeItem('Authorization');
+								auth.hidden = true;
+							});
+						}
+						btn_export.addEventListener('click', e => {
+							let query_ = new URLSearchParams();
+							[ ...main ].filter(el => {
+								return (el.name && el.value && ([ 'items', 'cors' ].indexOf(el.name) == -1));
+							}).forEach(el => query_.append(el.name, el.value));
+							prompt('Current url', new URL(location.pathname, location.href).href+'?'+query_.toString());
+						});
+						btn_import.addEventListener('click', e => {
+							let url = prompt('url JSON scheme');
+							if (url) {
+								let query_ = new URLSearchParams();
+								query_.append('import', url);
+								location.search = '?'+query_.toString();
+							}
+						});
+						main.addEventListener('submit', e => {
+							e.preventDefault();
+							obj.classList.remove('prettyprinted');
+							res.classList.remove('prettyprinted');
+							obj.parentNode.hidden = res.parentNode.hidden = false;
+							obj.innerText = res.innerText = 'Loading...';
+							let ping = (new Date()).getTime(),
+								opts = {
+									method: e.target.method.value
+								};
+							if (e.target.headers.value) {
+								opts.headers = Object.fromEntries(e.target.headers.value.split('\n').filter(v => v.trim()).map(v => v.split(':').map(v_ => v_.trim())));
+								if (opts.headers['Authorization']) {
+									sessionStorage.setItem('Authorization', opts.headers['Authorization']);
+									auth.hidden = false;
+									auth.addEventListener('click', () => {
+										sessionStorage.removeItem('Authorization');
+										auth.hidden = true;
+									});
+								}
+							}
+							if ((!opts.headers || !opts.headers['Authorization']) && sessionStorage.getItem('Authorization')) {
+								if (!opts.headers)
+									opts.headers = {};
+								opts.headers.Authorization = sessionStorage.getItem('Authorization');
+							}
+							if (e.target.body.value) {
+								/*
+								if (opts.headers && opts.headers['Content-Type'] && opts.headers['Content-Type'].startsWith('application/json'))
+									opts.body = JSON.stringify(Object.fromEntries(e.target.body.value.split('\n').filter(v => v).map(v => v.split(': '))));
+								else
+								*/
+								if (e.target.body.value.startsWith('{') && e.target.body.value.endsWith('}'))
+									opts.body = e.target.body.value;
+								else{
+									let formData = new FormData();
+									main.body.value.split('\n').filter(v => v.trim()).map(v => v.split(':').map(v_ => v_.trim())).forEach(v => {
+										formData.append(v[0], v[1]);
+									});
+									opts.body = formData;
+								}
+							}
+							fetch((e.target.cors.checked ? (isLocal ? '/proxy/' : 'https://cors-anywhere.herokuapp.com/') : '')+e.target.url.value, opts).then(d => {
+								let obj_ = {
+									status: (d.status+' '+d.statusText).trim(),
+									time: ((new Date()).getTime() - ping)+' ms',
+									headers: {}
+								}
+								for (var pair of d.headers.entries()) {
+									obj_.headers[pair[0]] = pair[1];
+								}
+								obj.innerHTML = JSON.stringify(obj_, null, '\t');
+								if (d.headers.get('content-type').indexOf('application/json') > -1)
+									return d.json();
+								else
+									return d.text();
+							}).then(d => {
+								res.innerHTML = ((d && (typeof(d) == 'object')) ? JSON.stringify(d, null, '\t') : document.createElement('a').appendChild(document.createTextNode(d)).parentNode.innerHTML);
+								if ('PR' in window)
+									PR.prettyPrint();
+								else{
+									let s = document.createElement('script');
+									s.src = 'https://cdn.jsdelivr.net/gh/google/code-prettify@master/loader/run_prettify.js';
+									s.onload = () => PR.prettyPrint();
+									document.body.append(s);
+								}
+							}).catch(() => (res.parentNode.hidden = !!(obj.innerText = 'Cors...')));
+						});
+					</script>
+					<style>
+						._ac { align-self: center }
+						._tc { text-align: center }
+						._f { width: 100% !important }
+						label.select select { -webkit-appearance: menulist }
+						label.select:after { content: unset }
+						#auth {
+							margin-left: 10px;
+							color: red;
+						}
+					</style>
+				</article>
+			</section>
+		</main>
+	</div>
+</body>
+</html>
