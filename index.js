@@ -6,7 +6,8 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 module.exports = async (fastify, opts) => (fastify
 	.register(require('point-of-view'), {
-		engine: { ejs: require('ejs') }
+		engine: { ejs: require('ejs') },
+		root: __dirname
 	})
 	.addContentTypeParser('*', (req, done) => done(null, req))
 	.get('/', (req, rep) => rep.view('index.html', { local: true }))
